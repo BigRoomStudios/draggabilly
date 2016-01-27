@@ -2107,7 +2107,9 @@ Draggabilly.prototype.dragStart = function( event, pointer ) {
 
   this.dragPoint.x = 0;
   this.dragPoint.y = 0;
-
+  
+  this.maxScrollHeight = this.scrollElement.scrollHeight;
+  
   // reset isDragging flag
   this.isDragging = true;
   classie.add( this.element, 'is-dragging' );
@@ -2116,7 +2118,6 @@ Draggabilly.prototype.dragStart = function( event, pointer ) {
   this.animate();
 };
 
-this.maxScrollHeight = this.scrollElement.scrollHeight;
 
 Draggabilly.prototype.measureContainment = function() {
   var containment = this.options.containment;
