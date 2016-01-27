@@ -2116,6 +2116,8 @@ Draggabilly.prototype.dragStart = function( event, pointer ) {
   this.animate();
 };
 
+this.maxScrollHeight = this.scrollElement.scrollHeight;
+
 Draggabilly.prototype.measureContainment = function() {
   var containment = this.options.containment;
   if ( !containment ) {
@@ -2183,10 +2185,6 @@ Draggabilly.prototype.dragMove = function( event, pointer, moveVector ) {
   } else {
     this.position.y = this.startPosition.y + dragY + this.scrollY;
     this.dragPoint.y = dragY + this.scrollY;
-  }
-  
-  if(!this.scrollMode) {
-    this.maxScrollHeight = this.scrollElement.scrollHeight;
   }
   
   if(this.scrollElement !== null) {
