@@ -135,7 +135,8 @@ proto._create = function() {
   this.lastDragMove = {};
   this.scrollDownThreshold = window.innerHeight - (window.innerHeight * 0.2);
   this.scrollUpThreshold = window.innerHeight * 0.2;
-  this.scrollSpeed = 10;
+  this.scrollSpeed = 15;
+  this.scrollElementOriginalScrollTop = 0;
   
   this.startPosition = extend( {}, this.position );
   
@@ -291,6 +292,7 @@ proto.dragStart = function( event, pointer ) {
   this.dragPoint.y = 0;
   
   this.maxScrollHeight = this.scrollElement.scrollHeight;
+  this.scrollElementOriginalScrollTop = this.scrollElement.scrollTop;
   
   // reset isDragging flag
   this.isDragging = true;
@@ -387,8 +389,9 @@ proto.dragMove = function( event, pointer, moveVector ) {
       if(this.windowScrollingInProgress === false) {
         
         if((this.maxScrollHeight - (this.scrollElement.scrollTop + window.innerHeight)) > 0) {
-          console.log('scroll down!!')
-          this.startScrollingDown();
+          this.windowScrollingInProgress = true;
+          this.scrollMode = true;
+          this.windowScrollingInProgress = "down";
         }
       }
       
@@ -396,14 +399,16 @@ proto.dragMove = function( event, pointer, moveVector ) {
       if(this.windowScrollingInProgress === false) {
         
         if(this.scrollElement.scrollTop > 0) {
-          console.log('scroll up!!')
-          this.startScrollingUp();
+          this.windowScrollingInProgress = true;
+          this.scrollMode = true;
+          this.windowScrollingInProgress = "up";
         }
       }
       
     } else {
-      clearInterval(this.scrollWindowInterval);
+      
       this.windowScrollingInProgress = false;
+      
     }
   }
   
@@ -413,66 +418,6 @@ proto.dragMove = function( event, pointer, moveVector ) {
     this.dispatchEvent( 'dragMove', event, [ pointer, moveVector ] );
   }
   
-};
-
-
-proto.startScrollingDown = function() {
-  
-  this.scrollMode = true;
-  this.windowScrollingInProgress = true;
-  clearInterval(this.scrollWindowInterval);
-  
-  var self = this;
-  
-  this.scrollWindowInterval = setInterval(function() {
-    
-    if((self.maxScrollHeight - (self.scrollElement.scrollTop + window.innerHeight)) > 0) {
-      
-      self.scrollElement.scrollTop += self.scrollSpeed;
-      
-      self.scrollY += self.scrollSpeed;
-      
-      var e = self.lastDragMove.event;
-      var p = self.lastDragMove.pointer;
-      var mv = self.lastDragMove.moveVector;
-      
-      self.dragMove(e, p, mv);
-      
-    } else {
-      clearInterval(self.scrollWindowInterval);
-      self.scrollElement.scrollTop = self.maxScrollHeight - window.innerHeight;
-    }
-  }, 10);
-};
-
-
-proto.startScrollingUp = function() {
-  
-  this.scrollMode = true;
-  this.windowScrollingInProgress = true;
-  clearInterval(this.scrollWindowInterval);
-  
-  var self = this;
-
-  this.scrollWindowInterval = setInterval(function() {
-    
-    if(self.scrollElement.scrollTop > 0) {
-      
-      self.scrollElement.scrollTop -= self.scrollSpeed;
-      
-      self.scrollY -= self.scrollSpeed;
-      
-      var e = self.lastDragMove.event;
-      var p = self.lastDragMove.pointer;
-      var mv = self.lastDragMove.moveVector;
-      
-      self.dragMove(e, p, mv);
-      
-    } else {
-      clearInterval(self._scrollWindowInterval);
-      self.scrollElement.scrollTop = 0;
-    }
-  }, 10);
 };
 
 
@@ -505,7 +450,6 @@ proto.containDrag = function( axis, drag, grid ) {
 proto.pointerUp = function( event, pointer ) {
   this.scrollMode = false;
   this.scrollY = 0;
-  clearInterval(this.scrollWindowInterval);
   
   this.element.classList.remove('is-pointer-down');
 
@@ -522,9 +466,7 @@ proto.dragEnd = function( event, pointer ) {
   if ( !this.isEnabled ) {
     return;
   }
-
-  clearInterval(this.scrollWindowInterval);
-
+  
   // use top left position when complete
   if ( transformProperty ) {
     this.element.style[ transformProperty ] = '';
@@ -541,14 +483,50 @@ proto.animate = function() {
   if ( !this.isDragging ) {
     return;
   }
-
+  
+  if(this.windowScrollingInProgress == "up") {
+    if(this.scrollElement.scrollTop > 0) {
+      
+      this.scrollY -= this.scrollSpeed;
+      
+      var e = this.lastDragMove.event;
+      var p = this.lastDragMove.pointer;
+      var mv = this.lastDragMove.moveVector;
+      
+      this.dragMove(e, p, mv);
+      
+    } else {
+      this.windowScrollingInProgress = null;
+      this.scrollElement.scrollTop = 0;
+    }
+  } else if(this.windowScrollingInProgress == "down") {
+    
+    if((this.maxScrollHeight - (this.scrollElement.scrollTop + window.innerHeight)) > 0) {
+      
+      this.scrollY += this.scrollSpeed;
+      
+      var e = this.lastDragMove.event;
+      var p = this.lastDragMove.pointer;
+      var mv = this.lastDragMove.moveVector;
+      
+      this.dragMove(e, p, mv);
+    } else {
+      this.windowScrollingInProgress = null;
+      this.scrollElement.scrollTop = this.maxScrollHeight - window.innerHeight;
+    }
+  }
+  
+  if(this.windowScrollingInProgress != null) {
+    this.scrollElement.scrollTop = this.scrollElementOriginalScrollTop + this.scrollY;
+  }
+  
   this.positionDrag();
-
+  
   var _this = this;
   requestAnimationFrame( function animateFrame() {
     _this.animate();
   });
-
+  
 };
 
 // left/top positioning
@@ -558,6 +536,7 @@ proto.setLeftTop = function() {
 };
 
 proto.positionDrag = function() {
+  console.log('hi Im positioning!')
   this.element.style[ transformProperty ] = 'translate3d( ' + this.dragPoint.x +
     'px, ' + this.dragPoint.y + 'px, 0)';
 };
