@@ -380,13 +380,14 @@ proto.dragMove = function( event, pointer, moveVector ) {
   
   if(this.scrollElement !== null) {
     
-    var yPos = event.clientY;
+    var yPos = event.pageY;
     
     if(yPos > this.scrollDownThreshold) {
       
       if(this.windowScrollingInProgress === false) {
         
         if((this.maxScrollHeight - (this.scrollElement.scrollTop + window.innerHeight)) > 0) {
+          console.log('scroll down!!')
           this.startScrollingDown();
         }
       }
@@ -395,6 +396,7 @@ proto.dragMove = function( event, pointer, moveVector ) {
       if(this.windowScrollingInProgress === false) {
         
         if(this.scrollElement.scrollTop > 0) {
+          console.log('scroll up!!')
           this.startScrollingUp();
         }
       }
