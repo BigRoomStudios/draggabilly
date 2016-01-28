@@ -1,30 +1,28 @@
 /*!
- * Draggabilly v1.2.4
+ * Draggabilly v2.1.0
  * Make that shiz draggable
  * http://draggabilly.desandro.com
  * MIT license
  */
 
-( function( window, factory ) {
-  'use strict';
+/*jshint browser: true, strict: true, undef: true, unused: true */
 
+( function( window, factory ) {
+  // universal module definition
+  /* jshint strict: false */ /*globals define, module, require */
   if ( typeof define == 'function' && define.amd ) {
     // AMD
     define( [
-        'classie/classie',
-        'get-style-property/get-style-property',
         'get-size/get-size',
         'unidragger/unidragger'
       ],
-      function( classie, getStyleProperty, getSize, Unidragger ) {
-        return factory( window, classie, getStyleProperty, getSize, Unidragger );
+      function( getSize, Unidragger ) {
+        return factory( window, getSize, Unidragger );
       });
-  } else if ( typeof exports == 'object' ) {
+  } else if ( typeof module == 'object' && module.exports ) {
     // CommonJS
     module.exports = factory(
       window,
-      require('desandro-classie'),
-      require('desandro-get-style-property'),
       require('get-size'),
       require('unidragger')
     );
@@ -32,14 +30,12 @@
     // browser global
     window.Draggabilly = factory(
       window,
-      window.classie,
-      window.getStyleProperty,
       window.getSize,
       window.Unidragger
     );
   }
 
-}( window, function factory( window, classie, getStyleProperty, getSize, Unidragger ) {
+}( window, function factory( window, getSize, Unidragger ) {
 
 'use strict';
 
@@ -58,72 +54,33 @@ function extend( a, b ) {
   return a;
 }
 
-// ----- get style ----- //
-
-var defView = document.defaultView;
-
-var getStyle = defView && defView.getComputedStyle ?
-  function( elem ) {
-    return defView.getComputedStyle( elem, null );
-  } :
-  function( elem ) {
-    return elem.currentStyle;
-  };
-
-
-// http://stackoverflow.com/a/384380/182183
-var isElement = ( typeof HTMLElement == 'object' ) ?
-  function isElementDOM2( obj ) {
-    return obj instanceof HTMLElement;
-  } :
-  function isElementQuirky( obj ) {
-    return obj && typeof obj == 'object' &&
-      obj.nodeType == 1 && typeof obj.nodeName == 'string';
-  };
+function isElement( obj ) {
+  return obj instanceof HTMLElement;
+}
 
 // -------------------------- requestAnimationFrame -------------------------- //
 
-// https://gist.github.com/1866474
+// get rAF, prefixed, if present
+var requestAnimationFrame = window.requestAnimationFrame ||
+  window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
 
+// fallback to setTimeout
 var lastTime = 0;
-var prefixes = 'webkit moz ms o'.split(' ');
-// get unprefixed rAF and cAF, if present
-var requestAnimationFrame = window.requestAnimationFrame;
-var cancelAnimationFrame = window.cancelAnimationFrame;
-// loop through vendor prefixes and get prefixed rAF and cAF
-var prefix;
-for( var i = 0; i < prefixes.length; i++ ) {
-  if ( requestAnimationFrame && cancelAnimationFrame ) {
-    break;
-  }
-  prefix = prefixes[i];
-  requestAnimationFrame = requestAnimationFrame || window[ prefix + 'RequestAnimationFrame' ];
-  cancelAnimationFrame  = cancelAnimationFrame  || window[ prefix + 'CancelAnimationFrame' ] ||
-                            window[ prefix + 'CancelRequestAnimationFrame' ];
-}
-
-// fallback to setTimeout and clearTimeout if either request/cancel is not supported
-if ( !requestAnimationFrame || !cancelAnimationFrame )  {
+if ( !requestAnimationFrame )  {
   requestAnimationFrame = function( callback ) {
     var currTime = new Date().getTime();
     var timeToCall = Math.max( 0, 16 - ( currTime - lastTime ) );
-    var id = window.setTimeout( function() {
-      callback( currTime + timeToCall );
-    }, timeToCall );
+    var id = setTimeout( callback, timeToCall );
     lastTime = currTime + timeToCall;
     return id;
-  };
-
-  cancelAnimationFrame = function( id ) {
-    window.clearTimeout( id );
   };
 }
 
 // -------------------------- support -------------------------- //
 
-var transformProperty = getStyleProperty('transform');
-// TODO fix quick & dirty check for 3D support
-var is3d = !!getStyleProperty('perspective');
+var docElem = document.documentElement;
+var transformProperty = typeof docElem.style.transform == 'string' ?
+  'transform' : 'WebkitTransform';
 
 var jQuery = window.jQuery;
 
@@ -146,7 +103,7 @@ function Draggabilly( element, options ) {
 }
 
 // inherit Unidragger methods
-extend( Draggabilly.prototype, Unidragger.prototype );
+var proto = Draggabilly.prototype = Object.create( Unidragger.prototype );
 
 Draggabilly.defaults = {
 };
@@ -155,12 +112,12 @@ Draggabilly.defaults = {
  * set options
  * @param {Object} opts
  */
-Draggabilly.prototype.option = function( opts ) {
+proto.option = function( opts ) {
   extend( this.options, opts );
 };
 
-Draggabilly.prototype._create = function() {
-  
+proto._create = function() {
+
   // properties
   this.position = {};
   this._getPosition();
@@ -185,7 +142,7 @@ Draggabilly.prototype._create = function() {
   window.addEventListener('resize', this._onResize.bind(this));
   
   // set relative positioning
-  var style = getStyle( this.element );
+  var style = getComputedStyle( this.element );
   if ( style.position != 'relative' && style.position != 'absolute' ) {
     this.element.style.position = 'relative';
   }
@@ -195,12 +152,12 @@ Draggabilly.prototype._create = function() {
   
 };
 
-Draggabilly.prototype._onResize = function() {
+proto._onResize = function() {
   this.scrollDownThreshold = window.innerHeight - (window.innerHeight * 0.2);
   this.scrollUpThreshold = window.innerHeight * 0.2;
 };
 
-Draggabilly.prototype.setScrollElement = function(el) {
+proto.setScrollElement = function(el) {
   this.scrollElement = el;
   this.maxScrollHeight = el.scrollHeight;
 };
@@ -208,7 +165,7 @@ Draggabilly.prototype.setScrollElement = function(el) {
 /**
  * set this.handles and bind start events to 'em
  */
-Draggabilly.prototype.setHandles = function() {
+proto.setHandles = function() {
   this.handles = this.options.handle ?
     this.element.querySelectorAll( this.options.handle ) : [ this.element ];
 
@@ -216,12 +173,12 @@ Draggabilly.prototype.setHandles = function() {
 };
 
 /**
- * emits events via eventEmitter and jQuery events
+ * emits events via EvEmitter and jQuery events
  * @param {String} type - name of event
  * @param {Event} event - original event
  * @param {Array} args - extra arguments
  */
-Draggabilly.prototype.dispatchEvent = function( type, event, args ) {
+proto.dispatchEvent = function( type, event, args ) {
   var emitArgs = [ event ].concat( args );
   this.emitEvent( type, emitArgs );
   var jQuery = window.jQuery;
@@ -241,14 +198,11 @@ Draggabilly.prototype.dispatchEvent = function( type, event, args ) {
 
 // -------------------------- position -------------------------- //
 
-// get left/top position from style
+// get x/y position from style
 Draggabilly.prototype._getPosition = function() {
-  // properties
-  var style = getStyle( this.element );
-
-  var x = parseInt( style.left, 10 );
-  var y = parseInt( style.top, 10 );
-
+  var style = getComputedStyle( this.element );
+  var x = this._getPositionCoord( style.left, 'width' );
+  var y = this._getPositionCoord( style.top, 'height' );
   // clean up 'auto' or other non-integer values
   this.position.x = isNaN( x ) ? 0 : x;
   this.position.y = isNaN( y ) ? 0 : y;
@@ -256,11 +210,18 @@ Draggabilly.prototype._getPosition = function() {
   this._addTransformPosition( style );
 };
 
-// add transform: translate( x, y ) to position
-Draggabilly.prototype._addTransformPosition = function( style ) {
-  if ( !transformProperty ) {
-    return;
+Draggabilly.prototype._getPositionCoord = function( styleSide, measure ) {
+  if ( styleSide.indexOf('%') != -1 ) {
+    // convert percent into pixel for Safari, #75
+    var parentSize = getSize( this.element.parentNode );
+    return ( parseFloat( styleSide ) / 100 ) * parentSize[ measure ];
   }
+
+  return parseInt( styleSide, 10 );
+};
+
+// add transform: translate( x, y ) to position
+proto._addTransformPosition = function( style ) {
   var transform = style[ transformProperty ];
   // bail out if value is 'none'
   if ( transform.indexOf('matrix') !== 0 ) {
@@ -284,16 +245,17 @@ Draggabilly.prototype._addTransformPosition = function( style ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.pointerDown = function( event, pointer ) {
+proto.pointerDown = function( event, pointer ) {
   this._dragPointerDown( event, pointer );
   // kludge to blur focused inputs in dragger
   var focused = document.activeElement;
-  if ( focused && focused.blur ) {
+  // do not blur body for IE10, metafizzy/flickity#117
+  if ( focused && focused.blur && focused != document.body ) {
     focused.blur();
   }
   // bind move and end events
   this._bindPostStartEvents( event );
-  classie.add( this.element, 'is-pointer-down' );
+  this.element.classList.add('is-pointer-down');
   this.dispatchEvent( 'pointerDown', event, [ pointer ] );
 };
 
@@ -302,7 +264,7 @@ Draggabilly.prototype.pointerDown = function( event, pointer ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.pointerMove = function( event, pointer ) {
+proto.pointerMove = function( event, pointer ) {
   var moveVector = this._dragPointerMove( event, pointer );
   this.dispatchEvent( 'pointerMove', event, [ pointer, moveVector ] );
   this._dragMove( event, pointer, moveVector );
@@ -313,7 +275,7 @@ Draggabilly.prototype.pointerMove = function( event, pointer ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.dragStart = function( event, pointer ) {
+proto.dragStart = function( event, pointer ) {
   if ( !this.isEnabled ) {
     return;
   }
@@ -332,21 +294,19 @@ Draggabilly.prototype.dragStart = function( event, pointer ) {
   
   // reset isDragging flag
   this.isDragging = true;
-  classie.add( this.element, 'is-dragging' );
+
+  this.element.classList.add('is-dragging');
   this.dispatchEvent( 'dragStart', event, [ pointer ] );
   // start animation
   this.animate();
 };
 
 
-Draggabilly.prototype.measureContainment = function() {
+proto.measureContainment = function() {
   var containment = this.options.containment;
   if ( !containment ) {
     return;
   }
-
-  this.size = getSize( this.element );
-  var elemRect = this.element.getBoundingClientRect();
 
   // use element if element
   var container = isElement( containment ) ? containment :
@@ -355,12 +315,22 @@ Draggabilly.prototype.measureContainment = function() {
     // otherwise just `true`, use the parent
     this.element.parentNode;
 
-  this.containerSize = getSize( container );
+  var elemSize = getSize( this.element );
+  var containerSize = getSize( container );
+  var elemRect = this.element.getBoundingClientRect();
   var containerRect = container.getBoundingClientRect();
 
-  this.relativeStartPosition = {
-    x: elemRect.left - containerRect.left,
-    y: elemRect.top  - containerRect.top
+  var borderSizeX = containerSize.borderLeftWidth + containerSize.borderRightWidth;
+  var borderSizeY = containerSize.borderTopWidth + containerSize.borderBottomWidth;
+
+  var position = this.relativeStartPosition = {
+    x: elemRect.left - ( containerRect.left + containerSize.borderLeftWidth ),
+    y: elemRect.top - ( containerRect.top + containerSize.borderTopWidth )
+  };
+
+  this.containSize = {
+    width: ( containerSize.width - borderSizeX ) - position.x - elemSize.width,
+    height: ( containerSize.height - borderSizeY ) - position.y - elemSize.height
   };
 };
 
@@ -371,7 +341,7 @@ Draggabilly.prototype.measureContainment = function() {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.dragMove = function( event, pointer, moveVector ) {
+proto.dragMove = function( event, pointer, moveVector ) {
   if ( !this.isEnabled ) {
     return;
   }
@@ -444,7 +414,7 @@ Draggabilly.prototype.dragMove = function( event, pointer, moveVector ) {
 };
 
 
-Draggabilly.prototype.startScrollingDown = function() {
+proto.startScrollingDown = function() {
   
   this.scrollMode = true;
   this.windowScrollingInProgress = true;
@@ -474,7 +444,7 @@ Draggabilly.prototype.startScrollingDown = function() {
 };
 
 
-Draggabilly.prototype.startScrollingUp = function() {
+proto.startScrollingUp = function() {
   
   this.scrollMode = true;
   this.windowScrollingInProgress = true;
@@ -509,7 +479,7 @@ function applyGrid( value, grid, method ) {
   return grid ? Math[ method ]( value / grid ) * grid : value;
 }
 
-Draggabilly.prototype.containDrag = function( axis, drag, grid ) {
+proto.containDrag = function( axis, drag, grid ) {
   if ( !this.options.containment ) {
     return drag;
   }
@@ -517,7 +487,7 @@ Draggabilly.prototype.containDrag = function( axis, drag, grid ) {
 
   var rel = this.relativeStartPosition[ axis ];
   var min = applyGrid( -rel, grid, 'ceil' );
-  var max = this.containerSize[ measure ] - rel - this.size[ measure ];
+  var max = this.containSize[ measure ];
   max = applyGrid( max, grid, 'floor' );
   return  Math.min( max, Math.max( min, drag ) );
 };
@@ -529,12 +499,14 @@ Draggabilly.prototype.containDrag = function( axis, drag, grid ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.pointerUp = function( event, pointer ) {
+
+proto.pointerUp = function( event, pointer ) {
   this.scrollMode = false;
   this.scrollY = 0;
   clearInterval(this.scrollWindowInterval);
   
-  classie.remove( this.element, 'is-pointer-down' );
+  this.element.classList.remove('is-pointer-down');
+
   this.dispatchEvent( 'pointerUp', event, [ pointer ] );
   this._dragPointerUp( event, pointer );
 };
@@ -544,24 +516,25 @@ Draggabilly.prototype.pointerUp = function( event, pointer ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
-Draggabilly.prototype.dragEnd = function( event, pointer ) {
+proto.dragEnd = function( event, pointer ) {
   if ( !this.isEnabled ) {
     return;
   }
-  this.isDragging = false;
+
   clearInterval(this.scrollWindowInterval);
+
   // use top left position when complete
   if ( transformProperty ) {
     this.element.style[ transformProperty ] = '';
     this.setLeftTop();
   }
-  classie.remove( this.element, 'is-dragging' );
+  this.element.classList.remove('is-dragging');
   this.dispatchEvent( 'dragEnd', event, [ pointer ] );
 };
 
 // -------------------------- animation -------------------------- //
 
-Draggabilly.prototype.animate = function() {
+proto.animate = function() {
   // only render and animate if dragging
   if ( !this.isDragging ) {
     return;
@@ -576,52 +549,40 @@ Draggabilly.prototype.animate = function() {
 
 };
 
-// transform translate function
-var translate = is3d ?
-  function( x, y ) {
-    return 'translate3d( ' + x + 'px, ' + y + 'px, 0)';
-  } :
-  function( x, y ) {
-    return 'translate( ' + x + 'px, ' + y + 'px)';
-  };
-
 // left/top positioning
-Draggabilly.prototype.setLeftTop = function() {
+proto.setLeftTop = function() {
   this.element.style.left = this.position.x + 'px';
   this.element.style.top  = this.position.y + 'px';
 };
 
-Draggabilly.prototype.positionDrag = transformProperty ?
-  function() {
-    // position with transform
-    this.element.style[ transformProperty ] = translate( this.dragPoint.x, this.dragPoint.y );
-  } : Draggabilly.prototype.setLeftTop;
+proto.positionDrag = function() {
+  this.element.style[ transformProperty ] = 'translate3d( ' + this.dragPoint.x +
+    'px, ' + this.dragPoint.y + 'px, 0)';
+};
 
 // ----- staticClick ----- //
 
-Draggabilly.prototype.staticClick = function( event, pointer ) {
+proto.staticClick = function( event, pointer ) {
   this.dispatchEvent( 'staticClick', event, [ pointer ] );
 };
 
 // ----- methods ----- //
 
-Draggabilly.prototype.enable = function() {
+proto.enable = function() {
   this.isEnabled = true;
 };
 
-Draggabilly.prototype.disable = function() {
+proto.disable = function() {
   this.isEnabled = false;
   if ( this.isDragging ) {
     this.dragEnd();
   }
 };
 
-Draggabilly.prototype.destroy = function() {
+proto.destroy = function() {
   this.disable();
   // reset styles
-  if ( transformProperty ) {
-    this.element.style[ transformProperty ] = '';
-  }
+  this.element.style[ transformProperty ] = '';
   this.element.style.left = '';
   this.element.style.top = '';
   this.element.style.position = '';
@@ -636,7 +597,7 @@ Draggabilly.prototype.destroy = function() {
 // ----- jQuery bridget ----- //
 
 // required for jQuery bridget
-Draggabilly.prototype._init = noop;
+proto._init = noop;
 
 if ( jQuery && jQuery.bridget ) {
   jQuery.bridget( 'draggabilly', Draggabilly );
