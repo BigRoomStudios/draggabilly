@@ -536,7 +536,6 @@ proto.setLeftTop = function() {
 };
 
 proto.positionDrag = function() {
-  console.log('hi Im positioning!')
   this.element.style[ transformProperty ] = 'translate3d( ' + this.dragPoint.x +
     'px, ' + this.dragPoint.y + 'px, 0)';
 };
