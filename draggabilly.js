@@ -60,21 +60,16 @@ function isElement( obj ) {
 
 // -------------------------- requestAnimationFrame -------------------------- //
 
-// get rAF, prefixed, if present
-var requestAnimationFrame = window.requestAnimationFrame ||
-  window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
-
-// fallback to setTimeout
 var lastTime = 0;
-if ( !requestAnimationFrame )  {
-  requestAnimationFrame = function( callback ) {
-    var currTime = new Date().getTime();
-    var timeToCall = Math.max( 0, 16 - ( currTime - lastTime ) );
-    var id = setTimeout( callback, timeToCall );
-    lastTime = currTime + timeToCall;
-    return id;
-  };
-}
+
+var requestAnimationFrame = function( callback ) {
+  var currTime = new Date().getTime();
+  var timeToCall = Math.max( 0, 16 - ( currTime - lastTime ) );
+  var id = setTimeout( callback, timeToCall );
+  lastTime = currTime + timeToCall;
+  return id;
+};
+
 
 // -------------------------- support -------------------------- //
 
