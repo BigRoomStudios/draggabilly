@@ -381,7 +381,7 @@ proto.dragMove = function( event, pointer, moveVector ) {
   }
   
   if(this.scrollElement !== null) {
-    var yPos = event.pageY || event.clientY;
+    var yPos = event.screenY || event.clientY;
     
     if(yPos > this.scrollDownThreshold) {
       
