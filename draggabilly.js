@@ -60,21 +60,16 @@ function isElement( obj ) {
 
 // -------------------------- requestAnimationFrame -------------------------- //
 
-// get rAF, prefixed, if present
-var requestAnimationFrame = window.requestAnimationFrame ||
-  window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame;
-
-// fallback to setTimeout
 var lastTime = 0;
-if ( !requestAnimationFrame )  {
-  requestAnimationFrame = function( callback ) {
-    var currTime = new Date().getTime();
-    var timeToCall = Math.max( 0, 16 - ( currTime - lastTime ) );
-    var id = setTimeout( callback, timeToCall );
-    lastTime = currTime + timeToCall;
-    return id;
-  };
-}
+
+var requestAnimationFrame = function( callback ) {
+  var currTime = new Date().getTime();
+  var timeToCall = Math.max( 0, 16 - ( currTime - lastTime ) );
+  var id = setTimeout( callback, timeToCall );
+  lastTime = currTime + timeToCall;
+  return id;
+};
+
 
 // -------------------------- support -------------------------- //
 
@@ -121,21 +116,46 @@ proto._create = function() {
   // properties
   this.position = {};
   this._getPosition();
-
+  
   this.startPoint = { x: 0, y: 0 };
   this.dragPoint = { x: 0, y: 0 };
-
+  
+  this.scrollMode = false;
+  this.preventDragUpdates = false;
+  this.scrollY = 0;
+  this.scrollElement = null;
+  this.maxScrollHeight = 0;
+  this.scrollInterval = null;
+  this.windowScrollingInProgress = false;
+  this.lastDragMove = {};
+  this.scrollDownThreshold = window.innerHeight - (window.innerHeight * 0.2);
+  this.scrollUpThreshold = window.innerHeight * 0.2;
+  this.scrollSpeed = 15;
+  this.scrollElementOriginalScrollTop = 0;
+  
   this.startPosition = extend( {}, this.position );
-
+  
+  window.addEventListener('resize', this._onResize.bind(this));
+  
   // set relative positioning
   var style = getComputedStyle( this.element );
   if ( style.position != 'relative' && style.position != 'absolute' ) {
     this.element.style.position = 'relative';
   }
-
+  
   this.enable();
   this.setHandles();
+  
+};
 
+proto._onResize = function() {
+  this.scrollDownThreshold = window.innerHeight - (window.innerHeight * 0.2);
+  this.scrollUpThreshold = window.innerHeight * 0.2;
+};
+
+proto.setScrollElement = function(el) {
+  this.scrollElement = el;
+  this.maxScrollHeight = el.scrollHeight;
 };
 
 /**
@@ -266,12 +286,19 @@ proto.dragStart = function( event, pointer ) {
 
   this.dragPoint.x = 0;
   this.dragPoint.y = 0;
+  
+  this.maxScrollHeight = this.scrollElement.scrollHeight;
+  this.scrollElementOriginalScrollTop = this.scrollElement.scrollTop;
+  
+  // reset isDragging flag
+  this.isDragging = true;
 
   this.element.classList.add('is-dragging');
   this.dispatchEvent( 'dragStart', event, [ pointer ] );
   // start animation
   this.animate();
 };
+
 
 proto.measureContainment = function() {
   var containment = this.options.containment;
@@ -316,6 +343,7 @@ proto.dragMove = function( event, pointer, moveVector ) {
   if ( !this.isEnabled ) {
     return;
   }
+  
   var dragX = moveVector.x;
   var dragY = moveVector.y;
 
@@ -332,15 +360,68 @@ proto.dragMove = function( event, pointer, moveVector ) {
   // constrain to axis
   dragX = this.options.axis == 'y' ? 0 : dragX;
   dragY = this.options.axis == 'x' ? 0 : dragY;
-
+  
+  // set x values
   this.position.x = this.startPosition.x + dragX;
-  this.position.y = this.startPosition.y + dragY;
-  // set dragPoint properties
   this.dragPoint.x = dragX;
-  this.dragPoint.y = dragY;
-
-  this.dispatchEvent( 'dragMove', event, [ pointer, moveVector ] );
+  
+  this.lastDragMove = {event: event, pointer: pointer, moveVector: moveVector};
+  
+  // set y values depending on if scrolling
+  if(!this.scrollMode) {
+    this.position.y = this.startPosition.y + dragY;
+    this.dragPoint.y = dragY;
+  } else {
+    this.position.y = this.startPosition.y + dragY + this.scrollY;
+    this.dragPoint.y = dragY + this.scrollY;
+  }
+  
+  if(this.scrollElement !== null) {
+    
+    var yPos;
+    
+    if(event.targetTouches) {
+      yPos = event.targetTouches[0].pageY;
+    } else {
+      yPos = event.pageY;
+    }
+    
+    if(yPos > this.scrollDownThreshold) {
+      
+      if(this.windowScrollingInProgress === false) {
+        
+        if((this.maxScrollHeight - (this.scrollElement.scrollTop + window.innerHeight)) > 0) {
+          this.windowScrollingInProgress = true;
+          this.scrollMode = true;
+          this.windowScrollingInProgress = "down";
+        }
+      }
+      
+    } else if(yPos < this.scrollUpThreshold) {
+      if(this.windowScrollingInProgress === false) {
+        
+        if(this.scrollElement.scrollTop > 0) {
+          this.windowScrollingInProgress = true;
+          this.scrollMode = true;
+          this.windowScrollingInProgress = "up";
+        }
+      }
+      
+    } else {
+      
+      this.windowScrollingInProgress = false;
+      
+    }
+  }
+  
+  if(this.scrollMode) {
+    this.dispatchEvent( 'dragMove', event, [ pointer, {x: dragX, y: dragY + this.scrollY} ] );
+  } else {
+    this.dispatchEvent( 'dragMove', event, [ pointer, moveVector ] );
+  }
+  
 };
+
 
 function applyGrid( value, grid, method ) {
   method = method || 'round';
@@ -367,8 +448,13 @@ proto.containDrag = function( axis, drag, grid ) {
  * @param {Event} event
  * @param {Event or Touch} pointer
  */
+
 proto.pointerUp = function( event, pointer ) {
+  this.scrollMode = false;
+  this.scrollY = 0;
+  
   this.element.classList.remove('is-pointer-down');
+
   this.dispatchEvent( 'pointerUp', event, [ pointer ] );
   this._dragPointerUp( event, pointer );
 };
@@ -382,6 +468,7 @@ proto.dragEnd = function( event, pointer ) {
   if ( !this.isEnabled ) {
     return;
   }
+  
   // use top left position when complete
   if ( transformProperty ) {
     this.element.style[ transformProperty ] = '';
@@ -398,14 +485,50 @@ proto.animate = function() {
   if ( !this.isDragging ) {
     return;
   }
-
+  
+  if(this.windowScrollingInProgress == "up") {
+    if(this.scrollElement.scrollTop > 0) {
+      
+      this.scrollY -= this.scrollSpeed;
+      
+      var e = this.lastDragMove.event;
+      var p = this.lastDragMove.pointer;
+      var mv = this.lastDragMove.moveVector;
+      
+      this.dragMove(e, p, mv);
+      
+    } else {
+      this.windowScrollingInProgress = null;
+      this.scrollElement.scrollTop = 0;
+    }
+  } else if(this.windowScrollingInProgress == "down") {
+    
+    if((this.maxScrollHeight - (this.scrollElement.scrollTop + window.innerHeight)) > 0) {
+      
+      this.scrollY += this.scrollSpeed;
+      
+      var e = this.lastDragMove.event;
+      var p = this.lastDragMove.pointer;
+      var mv = this.lastDragMove.moveVector;
+      
+      this.dragMove(e, p, mv);
+    } else {
+      this.windowScrollingInProgress = null;
+      this.scrollElement.scrollTop = this.maxScrollHeight - window.innerHeight;
+    }
+  }
+  
+  if(this.windowScrollingInProgress != null) {
+    this.scrollElement.scrollTop = this.scrollElementOriginalScrollTop + this.scrollY;
+  }
+  
   this.positionDrag();
-
+  
   var _this = this;
   requestAnimationFrame( function animateFrame() {
     _this.animate();
   });
-
+  
 };
 
 // left/top positioning
